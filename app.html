@@ -196,7 +196,7 @@ var firebaseConfig = {
   appId: "1:689588966690:web:4051981a3f2d2e2eb0417b"
 };
 var DEMO = firebaseConfig.apiKey === "PASTE_ME";
-var APP_VERSION = '2026-10-10-4'; // 每次发版改一次，“我的”页底部会显示
+var APP_VERSION = '2026-10-10-5'; // 每次发版改一次，“我的”页底部会显示
 document.getElementById('app-ver').textContent = '版本 ' + APP_VERSION;
 </script>
 <script>
@@ -229,7 +229,8 @@ function friendlyErr(e){
     'auth/quota-exceeded': '今日短信额度用完，请明天再试',
     'auth/invalid-phone-number': '手机号格式不正确',
     'auth/captcha-check-failed': '安全验证失败，请重试',
-    'auth/network-request-failed': '网络不给力，请检查后重试'
+    'auth/network-request-failed': '网络不给力，请检查后重试',
+    'auth/timeout': '发送超时，请检查网络后重试',
   };
   if(map[code]) return map[code];
   var m = e ? (e.message || '') : '';
@@ -361,14 +362,15 @@ function loginErr(msg, ok){
   e.style.display = msg ? 'block' : 'none';
   e.style.color = ok ? '#0d6e5f' : '#d64545';
 }
-function getVerifier(){
-  if(!window._verifier)
-    window._verifier = new firebase.auth.RecaptchaVerifier('recaptcha', { size:'invisible' });
-  return window._verifier;
-}
 function resetVerifier(){
   try{ if(window._verifier) window._verifier.clear(); }catch(e){}
   window._verifier = null;
+}
+/* 每次发码都用全新验证器：旧的先清掉，不复用，杜绝“已渲染”类卡住 */
+function newVerifier(){
+  resetVerifier();
+  window._verifier = new firebase.auth.RecaptchaVerifier('recaptcha', { size:'invisible' });
+  return window._verifier;
 }
 var _codeCd = 0;
 function startCodeCooldown(){
@@ -382,9 +384,9 @@ function startCodeCooldown(){
   }, 1000);
 }
 document.getElementById('btn-code').addEventListener('click', function(){
-  if(_codeCd > 0) return; // 冷却中，防重复点
   var b = this;
   if(b.disabled) return;
+  if(_codeCd > 0){ loginErr('请等' + _codeCd + '秒后再重新发送'); return; }
   loginErr('');
   var phone = document.getElementById('prefix').value + document.getElementById('phone').value.trim().replace(/\D/g,'');
   if(document.getElementById('phone').value.trim().length < 7){ loginErr('请填写正确的手机号'); return; }
@@ -395,15 +397,36 @@ document.getElementById('btn-code').addEventListener('click', function(){
     return;
   }
   b.disabled = true; b.textContent = '发送中…'; // 立刻给反馈，防重复点
-  firebase.auth().signInWithPhoneNumber(phone, getVerifier()).then(function(cr){
+  var done = false;
+  function finishOk(cr){
+    if(done) return; done = true;
     confirmResult = cr; window._realPhone = phone;
     loginErr('验证码已发送到你的手机，请查收。', true);
     startCodeCooldown();
-  }).catch(function(e){
-    resetVerifier(); // 验证器重置，下次点重新来，不会卡住
+  }
+  function finishErr(e){
+    if(done) return; done = true;
+    resetVerifier();
     b.disabled = false; b.textContent = '获取验证码';
     loginErr(friendlyErr(e));
-  });
+  }
+  try{
+    var verifier = newVerifier();
+    var timedOut = false;
+    var timer = setTimeout(function(){ /* 45秒还没回来就判超时 */
+      timedOut = true;
+      finishErr({code:'auth/timeout', message:'timeout'});
+    }, 45000);
+    firebase.auth().signInWithPhoneNumber(phone, verifier).then(function(cr){
+      clearTimeout(timer);
+      if(!timedOut) finishOk(cr);
+    }).catch(function(e){
+      clearTimeout(timer);
+      finishErr(e);
+    });
+  }catch(e){
+    finishErr(e);
+  }
 });
 document.getElementById('btn-login').addEventListener('click', function(){
   var btn = this;
