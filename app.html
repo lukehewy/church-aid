@@ -107,7 +107,7 @@
       <input id="nickname" placeholder="你的称呼（弟兄姊妹看到的名字）" maxlength="12">
       <div class="hint" id="login-err" style="color:#d64545;display:none;"></div>
       <button class="btn gray" id="btn-login">登录</button>
-      <p class="recaptcha-note">登录受 reCAPTCHA 保护，适用 Google <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">隐私政策</a>和<a href="https://policies.google.com/terms" target="_blank" rel="noopener">服务条款</a>。</p>
+      <p class="recaptcha-note">登录受 reCAPTCHA 保护，适用 Google <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">隐私政策</a>和<a href="https://policies.google.com/terms" target="_blank" rel="noopener">服务条款</a>。<br><span id="app-ver-login" style="color:#ccc;"></span></p>
     </div>
   </div>
 
@@ -196,8 +196,9 @@ var firebaseConfig = {
   appId: "1:689588966690:web:4051981a3f2d2e2eb0417b"
 };
 var DEMO = firebaseConfig.apiKey === "PASTE_ME";
-var APP_VERSION = '2026-10-10-5'; // 每次发版改一次，“我的”页底部会显示
+var APP_VERSION = '2026-10-10-5'; // 每次发版改一次，登录页和“我的”页底部会显示
 document.getElementById('app-ver').textContent = '版本 ' + APP_VERSION;
+document.getElementById('app-ver-login').textContent = '版本 ' + APP_VERSION;
 </script>
 <script>
 /* ================= 数据层（演示/真实二选一） ================= */
