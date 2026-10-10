@@ -175,6 +175,7 @@
     <h3 style="margin:6px 2px 10px;">我的发布</h3>
     <div id="mylist"></div>
     <div id="adminbox"></div>
+    <p style="text-align:center;color:#bbb;font-size:12px;margin:18px 0 8px;" id="app-ver"></p>
   </div>
 </main>
 <nav id="bottomnav" style="display:none;">
@@ -195,6 +196,8 @@ var firebaseConfig = {
   appId: "1:689588966690:web:4051981a3f2d2e2eb0417b"
 };
 var DEMO = firebaseConfig.apiKey === "PASTE_ME";
+var APP_VERSION = '2026-10-10-4'; // 每次发版改一次，“我的”页底部会显示
+document.getElementById('app-ver').textContent = '版本 ' + APP_VERSION;
 </script>
 <script>
 /* ================= 数据层（演示/真实二选一） ================= */
@@ -367,12 +370,6 @@ function resetVerifier(){
   try{ if(window._verifier) window._verifier.clear(); }catch(e){}
   window._verifier = null;
 }
-/* 预热：页面打开后提前加载 reCAPTCHA，点按钮时不用现等 */
-setTimeout(function(){
-  if(!DEMO && window.firebase && firebase.auth && document.getElementById('recaptcha')){
-    try{ getVerifier().render().catch(function(){}); }catch(e){}
-  }
-}, 1500);
 var _codeCd = 0;
 function startCodeCooldown(){
   _codeCd = 60;
