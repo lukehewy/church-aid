@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d6e5f">
+<title>教会互助平台</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤝</text></svg>">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         margin: 0; background: #f4f1ea; color: #333;
+         min-height: 100vh; min-height: 100dvh;
+         display: flex; flex-direction: column; font-size: 17px; }
+  header { flex: none; background: #0d6e5f; color: #fff; text-align: center;
+           padding: 14px; font-size: 20px; font-weight: bold; letter-spacing: 2px; }
+  header .demo { display: inline-block; font-size: 12px; background: #e8a13c;
+                 border-radius: 10px; padding: 2px 8px; margin-left: 8px;
+                 letter-spacing: 0; vertical-align: middle; }
+  main { flex: 1; overflow-y: auto; padding: 12px 12px 90px; }
+  .view { display: none; }
+  .view.on { display: block; }
+  .card { background: #fff; border-radius: 14px; padding: 16px; margin-bottom: 12px;
+          box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .card h3 { margin: 0 0 8px; font-size: 19px; }
+  .card .meta { font-size: 13px; color: #888; margin-bottom: 8px; }
+  .card .desc { font-size: 16px; color: #555; line-height: 1.6;
+                display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                overflow: hidden; }
+  .tag { display: inline-block; font-size: 13px; border-radius: 12px; padding: 3px 10px;
+         margin-right: 6px; color: #fff; }
+  .tag.service { background: #2f80ed; } .tag.tool { background: #e8a13c; }
+  .tag.need { background: #d64545; }
+  .tag.done { background: #999; }
+  .thumbs { display: flex; gap: 8px; margin-top: 10px; overflow-x: auto; }
+  .thumbs img { width: 90px; height: 90px; object-fit: cover; border-radius: 10px; flex: none; }
+  .bigimg { width: 100%; border-radius: 12px; margin: 8px 0; }
+  input, textarea, select { width: 100%; font-size: 17px; padding: 13px; margin: 8px 0;
+                           border: 1px solid #ddd; border-radius: 12px; background: #fff;
+                           font-family: inherit; }
+  textarea { min-height: 110px; resize: vertical; }
+  label { font-size: 15px; color: #666; display: block; margin-top: 6px; }
+  .btn { display: block; width: 100%; padding: 15px; font-size: 19px; font-weight: bold;
+         border: none; border-radius: 14px; background: #0d6e5f; color: #fff;
+         margin-top: 12px; cursor: pointer; }
+  .btn:active { transform: scale(.98); }
+  .btn:disabled { opacity: .55; }
+  .btn.gray { background: #fff; color: #0d6e5f; border: 1px solid #0d6e5f; }
+  .btn.danger { background: #fff; color: #d64545; border: 1px solid #d64545; }
+  .btn.small { font-size: 15px; padding: 10px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tabs button { flex: 1; padding: 12px; font-size: 17px; border-radius: 12px;
+                 border: 1px solid #ddd; background: #fff; color: #666; cursor: pointer; }
+  .tabs button.on { background: #0d6e5f; color: #fff; border-color: #0d6e5f; font-weight: bold; }
+  nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
+        background: #fff; border-top: 1px solid #e0ddd5;
+        padding-bottom: env(safe-area-inset-bottom); }
+  nav button { flex: 1; padding: 13px; font-size: 17px; border: none; background: none;
+               color: #888; cursor: pointer; }
+  nav button.on { color: #0d6e5f; font-weight: bold; }
+  .msg { background: #eef7f4; border-radius: 12px; padding: 10px 12px; margin: 8px 0;
+         font-size: 16px; }
+  .msg .who { font-size: 13px; color: #0d6e5f; font-weight: bold; margin-bottom: 4px; }
+  .msg.mine { background: #e3f0ff; text-align: right; }
+  .msg.mine .who { color: #2f80ed; }
+  .empty { text-align: center; color: #aaa; padding: 40px 0; font-size: 16px; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .hint { font-size: 14px; color: #888; line-height: 1.7; }
+  .backbtn { background: none; border: none; color: #0d6e5f; font-size: 17px;
+             padding: 4px 0; cursor: pointer; margin-bottom: 8px; }
+  .grecaptcha-badge { visibility: hidden !important; }
+  .recaptcha-note { font-size: 12px; color: #bbb; text-align: center; margin-top: 12px; line-height: 1.6; }
+  .recaptcha-note a { color: #bbb; }
+  #toast { position: fixed; left: 50%; bottom: 110px; transform: translateX(-50%) translateY(16px);
+           background: rgba(40,40,40,.88); color: #fff; font-size: 16px;
+           padding: 12px 24px; border-radius: 24px; opacity: 0; pointer-events: none;
+           transition: opacity .25s, transform .25s; z-index: 9999; max-width: 86%;
+           text-align: center; line-height: 1.5; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.ok { background: #0d6e5f; }
+</style>
+</head>
+<body>
+<header>教会互助平台<span class="demo" id="demobadge" style="display:none;">演示模式</span></header>
+<main>
+  <!-- 登录 -->
+  <div class="view on" id="v-login">
+    <div class="card">
+      <h3>手机号登录</h3>
+      <p class="hint">仅限本教会弟兄姊妹使用。手机号仅用于登录，不会公开给任何人。</p>
+      <div class="row">
+        <select id="prefix" style="flex:0 0 110px;">
+          <option value="+1">+1 加拿大</option>
+          <option value="+86">+86 中国</option>
+        </select>
+        <input id="phone" type="tel" inputmode="tel" placeholder="手机号码" style="flex:1;">
+      </div>
+      <div id="recaptcha"></div>
+      <button class="btn" id="btn-code">获取验证码</button>
+      <input id="code" type="text" inputmode="numeric" placeholder="6位验证码" style="margin-top:12px;">
+      <input id="nickname" placeholder="你的称呼（弟兄姊妹看到的名字）" maxlength="12">
+      <div class="hint" id="login-err" style="color:#d64545;display:none;"></div>
+      <button class="btn gray" id="btn-login">登录</button>
+      <p class="recaptcha-note">登录受 reCAPTCHA 保护，适用 Google <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">隐私政策</a>和<a href="https://policies.google.com/terms" target="_blank" rel="noopener">服务条款</a>。</p>
+    </div>
+  </div>
+
+  <!-- 等待批准 -->
+  <div class="view" id="v-pending">
+    <div class="card">
+      <h3>等待批准</h3>
+      <p class="hint">你的加入申请已提交，请等待管理员批准。批准后重新打开本页即可使用。</p>
+      <button class="btn gray small" id="btn-logout2">退出登录</button>
+    </div>
+  </div>
+
+  <!-- 首页 -->
+  <div class="view" id="v-home">
+    <div class="tabs" id="typetabs">
+      <button data-t="service" class="on">服务</button>
+      <button data-t="tool">工具</button>
+      <button data-t="need">需求</button>
+    </div>
+    <input id="q" placeholder="搜索标题或内容…">
+    <div id="postlist"></div>
+  </div>
+
+  <!-- 发布 -->
+  <div class="view" id="v-publish">
+    <div class="card">
+      <h3>发布</h3>
+      <label>类型</label>
+      <select id="p-type">
+        <option value="service">我能提供的服务</option>
+        <option value="tool">我能借出的工具</option>
+        <option value="need">我需要的帮助</option>
+      </select>
+      <label>标题</label>
+      <input id="p-title" placeholder="例如：会修水管，可帮忙" maxlength="40">
+      <label>详细说明</label>
+      <textarea id="p-desc" placeholder="时间、地点、注意事项…" maxlength="500"></textarea>
+      <label>照片（最多6张，会自动压缩）</label>
+      <input id="p-photos" type="file" accept="image/*" multiple>
+      <div class="thumbs" id="p-preview"></div>
+      <button class="btn" id="btn-pub">发布</button>
+    </div>
+  </div>
+
+  <!-- 详情 -->
+  <div class="view" id="v-detail">
+    <button class="backbtn" id="btn-back">‹ 返回列表</button>
+    <div id="detailbox"></div>
+    <div class="card">
+      <h3>留言联系</h3>
+      <p class="hint">留言只有你和发布者可见，不会公开。</p>
+      <div id="msglist"></div>
+      <textarea id="msg-text" placeholder="写留言…" maxlength="200"></textarea>
+      <button class="btn" id="btn-sendmsg">发送留言</button>
+    </div>
+  </div>
+
+  <!-- 我的 -->
+  <div class="view" id="v-mine">
+    <div class="card">
+      <h3 id="mine-name">我</h3>
+      <p class="hint" id="mine-phone"></p>
+      <button class="btn gray small" id="btn-logout">退出登录</button>
+    </div>
+    <h3 style="margin:6px 2px 10px;">我的发布</h3>
+    <div id="mylist"></div>
+    <div id="adminbox"></div>
+  </div>
+</main>
+<nav id="bottomnav" style="display:none;">
+  <button data-v="v-home" class="on">首页</button>
+  <button data-v="v-publish">发布</button>
+  <button data-v="v-mine">我的</button>
+</nav>
+<div id="toast"></div>
+
+<script>
+/* ============ Firebase 配置（已接正式项目，演示模式自动关闭） ============ */
+var firebaseConfig = {
+  apiKey: "AIzaSyBFKojb4nE4mdZLYjCg_vbehcvuiOJB81o",
+  authDomain: "church-aid-e45fe.firebaseapp.com",
+  projectId: "church-aid-e45fe",
+  storageBucket: "church-aid-e45fe.firebasestorage.app",
+  messagingSenderId: "689588966690",
+  appId: "1:689588966690:web:4051981a3f2d2e2eb0417b"
+};
+var DEMO = firebaseConfig.apiKey === "PASTE_ME";
+</script>
+<script>
+/* ================= 数据层（演示/真实二选一） ================= */
+var ADMIN_PHONES = ["+14168776225"]; // 管理员手机号（何勇），自动通过、无需批准
+var store = null;
+
+function uid(){ return Date.now().toString(36) + Math.floor(Math.random()*1e6).toString(36); }
+function fmtTime(ts){
+  return new Date(ts).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+var TYPENAME = { service:'服务', tool:'工具', need:'需求' };
+
+/* ---- 轻提示：代替系统弹窗 ---- */
+var _toastT = null;
+function toast(msg, ok){
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show' + (ok ? ' ok' : '');
+  clearTimeout(_toastT);
+  _toastT = setTimeout(function(){ t.className=''; }, 2600);
+}
+/* ---- 把 Firebase 英文报错翻译成中文 ---- */
+function friendlyErr(e){
+  var code = (e && e.code) || '';
+  var map = {
+    'auth/invalid-verification-code': '验证码不正确，请重新输入',
+    'auth/code-expired': '验证码已过期，请重新获取',
+    'auth/too-many-requests': '操作太频繁，请稍后再试',
+    'auth/quota-exceeded': '今日短信额度用完，请明天再试',
+    'auth/invalid-phone-number': '手机号格式不正确',
+    'auth/captcha-check-failed': '安全验证失败，请重试',
+    'auth/network-request-failed': '网络不给力，请检查后重试'
+  };
+  if(map[code]) return map[code];
+  var m = e ? (e.message || '') : '';
+  if(code === 'permission-denied' || m.indexOf('Missing or insufficient permissions') >= 0)
+    return '没有权限：新成员请先等待管理员批准';
+  if(code === 'storage/unauthorized') return '照片上传没有权限，请联系管理员';
+  if(code === 'storage/retry-limit-exceeded') return '照片上传超时，请换个网络再试';
+  return '操作失败：' + m;
+}
+
+/* ---- 演示模式：localStorage ---- */
+var DemoStore = {
+  key: 'churchAidDemoV1',
+  data: null,
+  load: function(){
+    try { this.data = JSON.parse(localStorage.getItem(this.key)) || null; } catch(e){ this.data=null; }
+    if(!this.data){
+      var now = Date.now();
+      this.data = {
+        users: [],
+        posts: [
+          { id:'p1', type:'service', title:'会修水管、换水龙头', desc:'周末有空，教会弟兄姊妹家里水管小问题可以找我，免费帮忙。', photos:['https://picsum.photos/seed/wrench/400'], ownerPhone:'+14165550001', ownerName:'张弟兄', status:'open', createdAt: now-86400000*2 },
+          { id:'p2', type:'tool', title:'可借出：电钻、梯子', desc:'博世电钻一把、6尺梯子一架，需要提前一天约时间。', photos:['https://picsum.photos/seed/drill/400'], ownerPhone:'+14165550002', ownerName:'李姊妹', status:'open', createdAt: now-86400000 },
+          { id:'p3', type:'need', title:'求助：搬家缺人手', desc:'下周六上午搬家，缺2-3位弟兄搭把手，有午饭。地点：Richmond Hill。', photos:[], ownerPhone:'+14165550003', ownerName:'王弟兄', status:'open', createdAt: now-3600000*5 }
+        ],
+        messages: []
+      };
+      this.save();
+    }
+    return this.data;
+  },
+  save: function(){ try{ localStorage.setItem(this.key, JSON.stringify(this.data)); }catch(e){} }
+};
+
+/* ---- 真实模式：Firebase ---- */
+var FbStore = {
+  db: null, storage: null,
+  init: function(){
+    firebase.initializeApp(firebaseConfig);
+    this.db = firebase.firestore();
+    this.storage = firebase.storage();
+  }
+};
+
+var me = null; // { phone, name, status }
+try { me = JSON.parse(localStorage.getItem('churchAidMe') || 'null'); } catch(e){}
+function saveMe(){ try{ localStorage.setItem('churchAidMe', JSON.stringify(me)); }catch(e){} }
+
+if(DEMO){
+  store = DemoStore; store.load();
+  document.getElementById('demobadge').style.display = 'inline-block';
+} else {
+  FbStore.init();
+}
+
+/* ================= 视图切换 ================= */
+var views = ['v-login','v-home','v-publish','v-detail','v-mine','v-pending'];
+function showPending(){
+  document.getElementById('bottomnav').style.display = 'none';
+  showView('v-pending');
+}
+function showView(id){
+  views.forEach(function(v){ document.getElementById(v).classList.toggle('on', v===id); });
+  document.querySelectorAll('#bottomnav button').forEach(function(b){
+    b.classList.toggle('on', b.dataset.v===id);
+  });
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('#bottomnav button').forEach(function(b){
+  b.addEventListener('click', function(){
+    showView(b.dataset.v);
+    if(b.dataset.v==='v-home') renderHome();
+    if(b.dataset.v==='v-mine') renderMine();
+  });
+});
+function afterLogin(){
+  document.getElementById('bottomnav').style.display = 'flex';
+  showView('v-home'); renderHome();
+}
+function resumeSession(){
+  if(!me) return;
+  if(DEMO){
+    var u = store.load().users.find(function(x){ return x.phone===me.phone; });
+    if(u){ me.name = u.name; me.status = u.status; saveMe(); }
+    applyStatus();
+  } else {
+    FbStore.db.collection('users').doc(me.phone).get().then(function(doc){
+      if(doc.exists){ var u2=doc.data(); me.name=u2.name; me.status=u2.status; saveMe(); applyStatus(); }
+      else { me = null; saveMe(); showView('v-login'); } // 档案不存在，重新登录
+    }).catch(function(){
+      me = null; saveMe(); showView('v-login'); // 读失败（登录过期），强制重新登录
+    });
+  }
+}
+function applyStatus(){
+  if(!me) return;
+  if(me.status === 'pending'){ showPending(); }
+  else if(me.status === 'rejected'){ me = null; saveMe(); }
+  else { afterLogin(); }
+}
+if(me){ resumeSession(); }
+
+/* ================= 登录 ================= */
+var confirmResult = null;
+function loginErr(msg, ok){
+  var e = document.getElementById('login-err');
+  e.textContent = msg || '';
+  e.style.display = msg ? 'block' : 'none';
+  e.style.color = ok ? '#0d6e5f' : '#d64545';
+}
+function getVerifier(){
+  if(!window._verifier)
+    window._verifier = new firebase.auth.RecaptchaVerifier('recaptcha', { size:'invisible' });
+  return window._verifier;
+}
+var _codeCd = 0;
+function startCodeCooldown(){
+  _codeCd = 60;
+  var b = document.getElementById('btn-code');
+  b.disabled = true;
+  var iv = setInterval(function(){
+    _codeCd--;
+    if(_codeCd <= 0){ clearInterval(iv); b.disabled = false; b.textContent = '获取验证码'; }
+    else { b.textContent = '重新发送(' + _codeCd + ')'; }
+  }, 1000);
+}
+document.getElementById('btn-code').addEventListener('click', function(){
+  if(_codeCd > 0) return; // 冷却中，防重复点
+  loginErr('');
+  var phone = document.getElementById('prefix').value + document.getElementById('phone').value.trim().replace(/\D/g,'');
+  if(document.getElementById('phone').value.trim().length < 7){ loginErr('请填写正确的手机号'); return; }
+  if(DEMO){
+    window._demoPhone = phone;
+    document.getElementById('code').value = '123456';
+    loginErr('演示模式：验证码已自动填入，请填写称呼后按登录', true);
+    return;
+  }
+  firebase.auth().signInWithPhoneNumber(phone, getVerifier()).then(function(cr){
+    confirmResult = cr; window._realPhone = phone;
+    loginErr('验证码已发送到你的手机，请查收。', true);
+    startCodeCooldown();
+  }).catch(function(e){ loginErr(friendlyErr(e)); });
+});
+document.getElementById('btn-login').addEventListener('click', function(){
+  var btn = this;
+  if(btn.disabled) return;
+  loginErr('');
+  var code = document.getElementById('code').value.trim();
+  var name = document.getElementById('nickname').value.trim().slice(0,12);
+  function enterByStatus(u){
+    me = { phone: u.phone, name: u.name, status: u.status }; saveMe();
+    if(u.status === 'approved'){ afterLogin(); }
+    else if(u.status === 'rejected'){ loginErr('你的申请未通过，请联系管理员'); }
+    else { showPending(); }
+  }
+  if(DEMO){
+    if(code !== '123456'){ loginErr('演示模式验证码是 123456，请先按“获取验证码”'); return; }
+    var phone = window._demoPhone;
+    if(!phone){ loginErr('请先按“获取验证码”'); return; }
+    if(!name){ loginErr('请填写你的称呼'); document.getElementById('nickname').focus(); return; }
+    var d = store.load();
+    var u = d.users.find(function(x){ return x.phone===phone; });
+    if(!u){
+      var autoOk = ADMIN_PHONES.indexOf(phone) >= 0;
+      u = { phone: phone, name: name, status: autoOk ? 'approved' : 'pending', createdAt: Date.now() };
+      d.users.push(u); store.save();
+    }
+    enterByStatus(u);
+    return;
+  }
+  if(!name){ loginErr('请填写你的称呼'); document.getElementById('nickname').focus(); return; }
+  if(!code){ loginErr('请填写短信里的6位验证码'); return; }
+  if(!confirmResult){ loginErr('请先按“获取验证码”'); return; }
+  btn.disabled = true;
+  window._pendingName = name;
+  confirmResult.confirm(code).then(function(){
+    var phone = window._realPhone;
+    var ref = FbStore.db.collection('users').doc(phone);
+    return ref.get().then(function(doc){
+      if(doc.exists){ return doc.data(); }
+      var autoOk = ADMIN_PHONES.indexOf(phone) >= 0;
+      var nu = { phone: phone, name: window._pendingName,
+                 status: autoOk ? 'approved' : 'pending', createdAt: Date.now() };
+      return ref.set(nu).then(function(){ return nu; });
+    });
+  }).then(function(u){ btn.disabled = false; enterByStatus(u); })
+   .catch(function(e){ btn.disabled = false; loginErr(friendlyErr(e)); });
+});
+function doLogout(){
+  if(!DEMO){ try{ firebase.auth().signOut(); }catch(e){} }
+  me = null; saveMe(); location.reload();
+}
+document.getElementById('btn-logout').addEventListener('click', doLogout);
+document.getElementById('btn-logout2').addEventListener('click', doLogout);
+
+/* ================= 首页列表 ================= */
+var curTab = 'service';
+document.querySelectorAll('#typetabs button').forEach(function(b){
+  b.addEventListener('click', function(){
+    curTab = b.dataset.t;
+    document.querySelectorAll('#typetabs button').forEach(function(x){ x.classList.toggle('on', x===b); });
+    renderHome();
+  });
+});
+document.getElementById('q').addEventListener('input', renderHome);
+
+function getPosts(){
+  if(DEMO){ return Promise.resolve(store.load().posts.slice().sort(function(a,b){ return b.createdAt-a.createdAt; })); }
+  return FbStore.db.collection('posts').orderBy('createdAt','desc').limit(200).get()
+    .then(function(snap){ var arr=[]; snap.forEach(function(d){ var o=d.data(); o.id=d.id; arr.push(o); }); return arr; });
+}
+
+function renderHome(){
+  var q = document.getElementById('q').value.trim();
+  getPosts().then(function(posts){
+    var list = posts.filter(function(p){
+      if(p.type !== curTab) return false;
+      if(p.status !== 'open' && !(me && p.ownerPhone===me.phone)) return false;
+      if(q && (p.title+p.desc).indexOf(q) < 0) return false;
+      return true;
+    });
+    var el = document.getElementById('postlist');
+    if(!list.length){ el.innerHTML = '<div class="empty">还没有内容，快去发布第一条吧</div>'; return; }
+    el.innerHTML = '';
+    list.forEach(function(p){
+      var c = document.createElement('div');
+      c.className = 'card';
+      var thumbs = (p.photos||[]).slice(0,3).map(function(u){ return '<img src="'+u+'">'; }).join('');
+      c.innerHTML = '<h3><span class="tag '+p.type+'">'+TYPENAME[p.type]+'</span>'+escapeHtml(p.title)+'</h3>' +
+        '<div class="meta">'+escapeHtml(p.ownerName||'')+' · '+fmtTime(p.createdAt)+'</div>' +
+        '<div class="desc">'+escapeHtml(p.desc||'')+'</div>' +
+        (thumbs ? '<div class="thumbs">'+thumbs+'</div>' : '');
+      c.addEventListener('click', function(){ openDetail(p.id); });
+      el.appendChild(c);
+    });
+  }).catch(function(){
+    document.getElementById('postlist').innerHTML = '<div class="empty">加载失败，请检查网络后重试</div>';
+  });
+}
+function escapeHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(m){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
+  });
+}
+
+/* ================= 发布 ================= */
+var pendingPhotos = [];
+var compressing = 0;
+document.getElementById('p-photos').addEventListener('change', function(e){
+  pendingPhotos = [];
+  var prev = document.getElementById('p-preview'); prev.innerHTML = '';
+  var files = Array.prototype.slice.call(e.target.files, 0, 6);
+  if(e.target.files.length > 6) toast('最多选6张照片，已取前6张');
+  files.forEach(function(f){
+    compressing++;
+    compressImage(f).then(function(blob){
+      pendingPhotos.push(blob);
+      var img = document.createElement('img');
+      img.src = URL.createObjectURL(blob);
+      prev.appendChild(img);
+    }, function(){
+      toast('有张照片处理失败，已跳过');
+    }).then(function(){ compressing--; });
+  });
+});
+function compressImage(file){
+  return new Promise(function(resolve, reject){
+    var img = new Image();
+    img.onload = function(){
+      try{
+        var maxDim = 1280, w = img.width, h = img.height;
+        if(Math.max(w,h) > maxDim){ var r = maxDim/Math.max(w,h); w = Math.round(w*r); h = Math.round(h*r); }
+        var c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        URL.revokeObjectURL(img.src);
+        c.toBlob(function(blob){ blob ? resolve(blob) : reject(new Error('compress')); }, 'image/jpeg', 0.82);
+      }catch(err){ reject(err); }
+    };
+    img.onerror = function(){ reject(new Error('load')); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+document.getElementById('btn-pub').addEventListener('click', function(){
+  var btn = this;
+  if(btn.disabled) return;
+  var type = document.getElementById('p-type').value;
+  var title = document.getElementById('p-title').value.trim();
+  var desc = document.getElementById('p-desc').value.trim();
+  if(!title){ toast('请填写标题'); document.getElementById('p-title').focus(); return; }
+  if(compressing > 0){ toast('照片还在处理中，请稍候'); return; }
+  if(DEMO){
+    var d = store.load();
+    var urls = pendingPhotos.map(function(b){ return URL.createObjectURL(b); });
+    d.posts.push({ id: uid(), type: type, title: title, desc: desc, photos: urls,
+      ownerPhone: me.phone, ownerName: me.name, status:'open', createdAt: Date.now() });
+    store.save(); resetPubForm();
+    toast('发布成功', true); showView('v-home'); renderHome();
+    return;
+  }
+  btn.disabled = true;
+  var postId = uid();
+  var uploads = pendingPhotos.map(function(blob, i){
+    var ref = FbStore.storage.ref('posts/'+postId+'/'+i+'.jpg');
+    return ref.put(blob, { contentType:'image/jpeg' }).then(function(){ return ref.getDownloadURL(); });
+  });
+  Promise.all(uploads).then(function(urls){
+    return FbStore.db.collection('posts').doc(postId).set({
+      type: type, title: title, desc: desc, photos: urls,
+      ownerPhone: me.phone, ownerName: me.name, status: 'open', createdAt: Date.now()
+    });
+  }).then(function(){
+    resetPubForm(); toast('发布成功', true); showView('v-home'); renderHome();
+  }).catch(function(e){
+    toast(friendlyErr(e));
+  }).then(function(){ btn.disabled = false; });
+});
+function resetPubForm(){
+  document.getElementById('p-title').value='';
+  document.getElementById('p-desc').value='';
+  document.getElementById('p-photos').value='';
+  document.getElementById('p-preview').innerHTML='';
+  pendingPhotos = [];
+}
+
+/* ================= 详情 + 留言 ================= */
+var curPostId = null;
+function openDetail(id){ curPostId = id; showView('v-detail'); renderDetail(); }
+document.getElementById('btn-back').addEventListener('click', function(){ showView('v-home'); renderHome(); });
+
+function getPost(id){
+  if(DEMO){ return Promise.resolve(store.load().posts.find(function(p){ return p.id===id; })); }
+  return FbStore.db.collection('posts').doc(id).get().then(function(d){
+    if(!d.exists) return null;
+    var o = d.data(); o.id = d.id; return o;
+  });
+}
+function getMessages(postId){
+  if(DEMO){
+    return Promise.resolve(store.load().messages.filter(function(m){ return m.postId===postId; })
+      .sort(function(a,b){ return a.createdAt-b.createdAt; }));
+  }
+  return FbStore.db.collection('messages').where('postId','==',postId).limit(100).get()
+    .then(function(snap){ var arr=[]; snap.forEach(function(d){ var o=d.data(); o.id=d.id; arr.push(o); });
+      arr.sort(function(a,b){ return a.createdAt-b.createdAt; }); return arr; });
+}
+function renderDetail(){
+  getPost(curPostId).then(function(p){
+    if(!p){ toast('这条内容已被删除'); showView('v-home'); renderHome(); return; }
+    var imgs = (p.photos||[]).map(function(u){ return '<img class="bigimg" src="'+u+'">'; }).join('');
+    var isMine = me && p.ownerPhone === me.phone;
+    var isAdmin = me && ADMIN_PHONES.indexOf(me.phone) >= 0;
+    document.getElementById('detailbox').innerHTML =
+      '<div class="card"><h3><span class="tag '+p.type+'">'+TYPENAME[p.type]+'</span>' +
+      (p.status!=='open' ? '<span class="tag done">已解决</span>' : '') + escapeHtml(p.title)+'</h3>' +
+      '<div class="meta">'+escapeHtml(p.ownerName||'')+' · '+fmtTime(p.createdAt)+'</div>' +
+      '<div style="font-size:17px;line-height:1.8;white-space:pre-wrap;">'+escapeHtml(p.desc||'')+'</div>' +
+      imgs +
+      ((isMine||isAdmin) ? '<div class="row" style="margin-top:10px;">' +
+        (p.status==='open' ? '<button class="btn gray small" id="btn-done">标记已解决</button>' : '') +
+        '<button class="btn danger small" id="btn-del">删除</button></div>' : '') +
+      '</div>';
+    var bd = document.getElementById('btn-done');
+    if(bd) bd.addEventListener('click', function(){ setPostStatus(p.id,'done'); });
+    var bl = document.getElementById('btn-del');
+    if(bl) bl.addEventListener('click', function(){ if(confirm('确定删除这条发布？照片也会一起删掉。')) deletePost(p.id); });
+
+    getMessages(curPostId).then(function(msgs){
+      var visible = msgs.filter(function(m){
+        return isMine || isAdmin || m.fromPhone===me.phone || p.ownerPhone===me.phone;
+      });
+      var el = document.getElementById('msglist');
+      el.innerHTML = visible.length ? '' : '<div class="empty" style="padding:16px;">还没有留言，来留第一条吧</div>';
+      visible.forEach(function(m){
+        var d = document.createElement('div');
+        d.className = 'msg' + (m.fromPhone===me.phone ? ' mine' : '');
+        d.innerHTML = '<div class="who">'+escapeHtml(m.fromName)+'</div>' + escapeHtml(m.text);
+        el.appendChild(d);
+      });
+    }).catch(function(){});
+  }).catch(function(){
+    toast('内容加载失败'); showView('v-home'); renderHome();
+  });
+}
+function setPostStatus(id, st){
+  if(DEMO){ var d=store.load(); var p=d.posts.find(function(x){return x.id===id;}); if(p){p.status=st;store.save();} renderDetail(); return; }
+  FbStore.db.collection('posts').doc(id).update({status:st}).then(renderDetail)
+    .catch(function(e){ toast(friendlyErr(e)); });
+}
+function deletePost(id){
+  if(DEMO){ var d=store.load(); d.posts=d.posts.filter(function(x){return x.id!==id;}); store.save(); showView('v-home'); renderHome(); return; }
+  getPost(id).then(function(p){
+    return FbStore.db.collection('posts').doc(id).delete().then(function(){ return p; });
+  }).then(function(p){
+    (p && p.photos || []).forEach(function(u){
+      try{ FbStore.storage.refFromURL(u).delete(); }catch(e){}
+    });
+    toast('已删除', true); showView('v-home'); renderHome();
+  }).catch(function(e){ toast(friendlyErr(e)); });
+}
+document.getElementById('btn-sendmsg').addEventListener('click', function(){
+  var btn = this;
+  if(btn.disabled) return;
+  var text = document.getElementById('msg-text').value.trim();
+  if(!text){ toast('请写留言内容'); return; }
+  btn.disabled = true;
+  getPost(curPostId).then(function(p){
+    if(!p){ toast('这条内容已被删除'); showView('v-home'); renderHome(); return null; }
+    var msg = { id: uid(), postId: curPostId, fromPhone: me.phone, fromName: me.name,
+      toPhone: p.ownerPhone, text: text, createdAt: Date.now() };
+    if(DEMO){ var d=store.load(); d.messages.push(msg); store.save();
+      document.getElementById('msg-text').value=''; renderDetail(); return null; }
+    return FbStore.db.collection('messages').doc(msg.id).set(msg).then(function(){
+      document.getElementById('msg-text').value=''; renderDetail();
+    });
+  }).catch(function(e){ toast(friendlyErr(e)); })
+    .then(function(){ btn.disabled = false; });
+});
+
+/* ================= 我的 + 管理员 ================= */
+function getPendingUsers(){
+  if(DEMO){ return Promise.resolve(store.load().users.filter(function(u){ return u.status==='pending'; })); }
+  return FbStore.db.collection('users').where('status','==','pending').get()
+    .then(function(snap){ var arr=[]; snap.forEach(function(d){ arr.push(d.data()); }); return arr; });
+}
+function setUserStatus(phone, st){
+  if(DEMO){ var d=store.load(); var u=d.users.find(function(x){ return x.phone===phone; }); if(u){ u.status=st; store.save(); } renderMine(); return; }
+  FbStore.db.collection('users').doc(phone).update({ status: st }).then(renderMine)
+    .catch(function(e){ toast(friendlyErr(e)); renderMine(); });
+}
+function renderMine(){
+  document.getElementById('mine-name').textContent = me ? me.name : '我';
+  document.getElementById('mine-phone').textContent = '仅自己可见的登录手机：' + (me ? me.phone : '');
+  getPosts().then(function(posts){
+    var mine = posts.filter(function(p){ return me && p.ownerPhone===me.phone; });
+    var el = document.getElementById('mylist');
+    el.innerHTML = mine.length ? '' : '<div class="empty">你还没有发布</div>';
+    mine.forEach(function(p){
+      var c = document.createElement('div');
+      c.className = 'card';
+      c.innerHTML = '<h3><span class="tag '+p.type+'">'+TYPENAME[p.type]+'</span>' +
+        (p.status==='done' ? '<span class="tag done">已解决</span>' : '') + escapeHtml(p.title) + '</h3>' +
+        '<div class="meta">'+fmtTime(p.createdAt)+'</div>';
+      c.addEventListener('click', function(){ openDetail(p.id); });
+      el.appendChild(c);
+    });
+  }).catch(function(){});
+  var isAdmin = me && ADMIN_PHONES.indexOf(me.phone) >= 0;
+  var ab = document.getElementById('adminbox');
+  if(isAdmin){
+    ab.innerHTML = '<div class="card"><h3>管理员</h3>' +
+      '<p class="hint">待批准的新成员：</p><div id="pendinglist"><div class="empty" style="padding:12px;">暂无</div></div>' +
+      '<p class="hint">内容管理：进入任意内容可下架或删除。</p>' +
+      '<button class="btn gray small" id="btn-allposts">浏览全部内容</button></div>';
+    document.getElementById('btn-allposts').addEventListener('click', function(){
+      showView('v-home'); renderHome();
+    });
+    getPendingUsers().then(function(list){
+      var pl = document.getElementById('pendinglist');
+      if(!list.length) return;
+      pl.innerHTML = '';
+      list.forEach(function(u){
+        var row = document.createElement('div');
+        row.className = 'msg';
+        row.innerHTML = '<div class="who">'+escapeHtml(u.name)+'</div>' +
+          '<div class="hint">'+escapeHtml(u.phone)+'</div>' +
+          '<div class="row" style="margin-top:8px;">' +
+          '<button class="btn small" data-a="ok">批准</button>' +
+          '<button class="btn danger small" data-a="no">拒绝</button></div>';
+        row.querySelector('[data-a="ok"]').addEventListener('click', function(){
+          this.disabled = true; setUserStatus(u.phone,'approved');
+        });
+        row.querySelector('[data-a="no"]').addEventListener('click', function(){
+          if(!confirm('确定拒绝 '+u.name+' 的加入申请吗？')) return;
+          this.disabled = true; setUserStatus(u.phone,'rejected');
+        });
+        pl.appendChild(row);
+      });
+    }).catch(function(){});
+  } else { ab.innerHTML = ''; }
+}
+</script>
+</body>
+</html>
