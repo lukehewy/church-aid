@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>台球切球角度练习</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body { margin:0; font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background:#0c1f14; color:#fff; overflow:hidden; }
+  .wrap { height:100dvh; display:flex; flex-direction:column; }
+  .stage { flex:1; position:relative; min-height:0; }
+  canvas#table { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .magCard { position:absolute; top:10px; right:10px; width:min(30vw,230px);
+             display:none; background:rgba(18,18,18,.94); border-radius:10px; padding:6px;
+             box-shadow:0 4px 18px rgba(0,0,0,.55); border:1px solid #3a3a3a; }
+  .magCard.show { display:block; }
+  canvas#mag { width:100%; display:block; border-radius:6px; background:#f7f7f7; }
+  #magClose { position:absolute; top:-11px; right:-11px; width:28px; height:28px; min-height:0;
+              border-radius:50%; background:#2c2c2c; color:#ddd; border:1px solid #555;
+              font-size:14px; padding:0; line-height:1; }
+  .bar { flex:none; display:flex; align-items:center; gap:8px; padding:7px 10px;
+         background:rgba(8,24,15,.97); border-top:1px solid #234d31; }
+  .bar label { font-size:13px; color:#cfe6d4; white-space:nowrap; }
+  #guess { width:62px; font-size:15px; padding:6px 4px; border-radius:8px;
+           border:1.5px solid #2e7d32; text-align:center; background:#0e2a18; color:#fff; }
+  .bar .deg { font-size:14px; color:#cfe6d4; }
+  .bar button { font-size:13px; padding:8px 14px; border:none; border-radius:8px;
+                cursor:pointer; min-height:38px; white-space:nowrap; }
+  .bar button:disabled { opacity:.4; }
+  #btnSubmit { background:#2e7d32; color:#fff; }
+  #btnNext { background:#ef6c00; color:#fff; }
+  #btnFs { background:#33523f; color:#fff; }
+  #result { flex:1; font-size:13px; color:#ffd54f; white-space:nowrap;
+            overflow:hidden; text-overflow:ellipsis; }
+  #stats { font-size:11px; color:#8fb598; white-space:nowrap; }
+  #portrait { display:none; }
+  @media (orientation: portrait) {
+    .wrap { display:none; }
+    #portrait { display:flex; height:100dvh; align-items:center; justify-content:center;
+                font-size:20px; color:#dcefe2; text-align:center; padding:20px;
+                background:#10241a; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage" id="stage">
+    <canvas id="table"></canvas>
+    <div class="magCard" id="magCard">
+      <button id="magClose">✕</button>
+      <canvas id="mag"></canvas>
+    </div>
+  </div>
+  <div class="bar">
+    <label for="guess">角度</label>
+    <input id="guess" type="number" inputmode="decimal" min="0" max="90" step="0.5" placeholder="30">
+    <span class="deg">°</span>
+    <button id="btnSubmit">提交</button>
+    <button id="btnNext" disabled>下一题</button>
+    <button id="btnFs" title="全屏">⛶</button>
+    <span id="result"></span>
+    <span id="stats">还没有开始练习</span>
+  </div>
+</div>
+<div id="portrait">请把手机横过来使用 📱↻</div>
+
+<script>
+"use strict";
+/* ============ 台面参数（基准单位） ============ */
+var BASE_W = 1000, BASE_H = 558, RAIL = 58, BALL_R = 14;
+var PX0 = RAIL, PY0 = RAIL, PX1 = BASE_W - RAIL, PY1 = BASE_H - RAIL;
+var MAX_THETA = 73.0;
+var FELT = "#0d7a35", FELT_EDGE = "#0a5e29";
+var RAIL_COLOR = "#5b3a1e", RAIL_DARK = "#3a2412", GOLD = "#ffd54f";
+var BALL_COLORS = [
+  ["#d32f2f",3],["#1976d2",2],["#f57c00",5],
+  ["#7b1fa2",4],["#00695c",6],["#8e2424",7]
+];
+
+/* 袋口：圆心略推出台面之外；开口中点 = 袋口两颚中点 */
+var POCKETS = (function(){
+  var cp = 14, d = cp * 0.7071, cpr = 25, spr = 21;
+  var coff = (Math.sqrt(cpr*cpr - d*d) - d) / 2;
+  return [
+    {x:PX0-d, y:PY0-d, r:cpr, mx:PX0+coff, my:PY0+coff},
+    {x:(PX0+PX1)/2, y:PY0-cp, r:spr, mx:(PX0+PX1)/2, my:PY0},
+    {x:PX1+d, y:PY0-d, r:cpr, mx:PX1-coff, my:PY0+coff},
+    {x:PX0-d, y:PY1+d, r:cpr, mx:PX0+coff, my:PY1-coff},
+    {x:(PX0+PX1)/2, y:PY1+cp, r:spr, mx:(PX0+PX1)/2, my:PY1},
+    {x:PX1+d, y:PY1+d, r:cpr, mx:PX1-coff, my:PY1-coff}
+  ];
+})();
+
+/* ============ 向量小工具 ============ */
+function vsub(a,b){ return [a[0]-b[0], a[1]-b[1]]; }
+function vlen(v){ return Math.hypot(v[0], v[1]); }
+function vnorm(v){ var l=vlen(v); return l>1e-9 ? [v[0]/l, v[1]/l] : [0,0]; }
+function angleBetween(a,b){
+  var la=vlen(a), lb=vlen(b);
+  if(la<1e-9 || lb<1e-9) return 0;
+  var c=(a[0]*b[0]+a[1]*b[1])/(la*lb);
+  c=Math.max(-1,Math.min(1,c));
+  return Math.acos(c)*180/Math.PI;
+}
+function rayToRail(O,d){
+  var ts=[];
+  if(Math.abs(d[0])>1e-9){
+    [PX0,PX1].forEach(function(xe){
+      var t=(xe-O[0])/d[0];
+      if(t>0){ var y=O[1]+t*d[1]; if(y>=PY0-1e-6 && y<=PY1+1e-6) ts.push(t); }
+    });
+  }
+  if(Math.abs(d[1])>1e-9){
+    [PY0,PY1].forEach(function(ye){
+      var t=(ye-O[1])/d[1];
+      if(t>0){ var x=O[0]+t*d[0]; if(x>=PX0-1e-6 && x<=PX1+1e-6) ts.push(t); }
+    });
+  }
+  var t=ts.length?Math.min.apply(null,ts):0;
+  return [O[0]+t*d[0], O[1]+t*d[1]];
+}
+
+/* ============ 出题 ============ */
+function makeScenario(thetaMin, thetaMax){
+  for(var k=0;k<800;k++){
+    var O=[PX0+70+Math.random()*(PX1-PX0-140), PY0+70+Math.random()*(PY1-PY0-140)];
+    if(POCKETS.some(function(p){ return vlen(vsub(O,[p.x,p.y]))<60; })) continue;
+    var C=[PX0+40+Math.random()*(PX1-PX0-80), PY0+40+Math.random()*(PY1-PY0-80)];
+    if(vlen(vsub(C,O))<4*BALL_R) continue;
+    if(POCKETS.some(function(p){ return vlen(vsub(C,[p.x,p.y]))<45; })) continue;
+    var best=null;
+    for(var i=0;i<6;i++){
+      var p=POCKETS[i];
+      var dOp=Math.hypot(O[0]-p.mx, O[1]-p.my);
+      if(dOp<80) continue;
+      var theta=angleBetween(vsub(O,C), [p.mx-O[0], p.my-O[1]]);
+      if(theta>MAX_THETA) continue;
+      if(theta>=thetaMin && theta<=thetaMax){
+        var score=theta*dOp*dOp/p.r;   /* 综合难度分：越小越好打 */
+        if(!best || score<best.score){
+          var u=[(p.mx-O[0])/dOp,(p.my-O[1])/dOp];
+          best={score:score, idx:i, u:u, theta:theta, dOp:dOp};
+        }
+      }
+    }
+    if(!best) continue;
+    var bc=BALL_COLORS[Math.floor(Math.random()*BALL_COLORS.length)];
+    var G=[O[0]-2*BALL_R*best.u[0], O[1]-2*BALL_R*best.u[1]];
+    return {C:C, O:O, P:POCKETS[best.idx], pidx:best.idx, G:G, u:best.u,
+            theta:best.theta, dOp:best.dOp, color:bc[0], number:bc[1]};
+  }
+  return null;
+}
+
+/* ============ 画布 ============ */
+var stageEl=document.getElementById('stage');
+var tableCv=document.getElementById('table'), tctx=tableCv.getContext('2d');
+var magCard=document.getElementById('magCard');
+var magCv=document.getElementById('mag'), mctx=magCv.getContext('2d');
+var view={s:1, ox:0, oy:0, dpr:1};
+
+function fitTable(){
+  var dpr=window.devicePixelRatio||1;
+  var w=stageEl.clientWidth, h=stageEl.clientHeight;
+  if(w<10||h<10) return;
+  tableCv.width=Math.round(w*dpr); tableCv.height=Math.round(h*dpr);
+  var s=Math.min(w/BASE_W, h/BASE_H);
+  view={s:s, ox:(w-BASE_W*s)/2, oy:(h-BASE_H*s)/2, dpr:dpr};
+  redraw();
+}
+function applyTableTransform(){
+  tctx.setTransform(1,0,0,1,0,0);
+  tctx.clearRect(0,0,tableCv.width,tableCv.height);
+  tctx.setTransform(view.dpr*view.s,0,0,view.dpr*view.s,
+                    view.dpr*view.ox, view.dpr*view.oy);
+}
+function fitMag(){
+  var dpr=window.devicePixelRatio||1;
+  var W=Math.max(80, magCard.clientWidth-12);
+  magCv.width=Math.round(W*dpr); magCv.height=Math.round(W*dpr);
+  magCv.style.width=W+'px'; magCv.style.height=W+'px';
+  return {w:W, dpr:dpr};
+}
+
+function circle(c,x,y,r,fill,stroke,lw){
+  c.beginPath(); c.arc(x,y,r,0,Math.PI*2);
+  if(fill){ c.fillStyle=fill; c.fill(); }
+  if(stroke){ c.strokeStyle=stroke; c.lineWidth=lw||1; c.stroke(); }
+}
+function line(c,x1,y1,x2,y2,color,w,dash){
+  c.beginPath(); c.moveTo(x1,y1); c.lineTo(x2,y2);
+  c.strokeStyle=color; c.lineWidth=w||2;
+  c.setLineDash(dash||[]); c.stroke(); c.setLineDash([]);
+}
+function text(c,s,x,y,color,size,bold,align){
+  c.fillStyle=color; c.font=(bold?"bold ":"")+size+"px sans-serif";
+  c.textAlign=align||"center"; c.textBaseline="middle";
+  c.fillText(s,x,y);
+}
+
+function drawTable(){
+  applyTableTransform();
+  var c=tctx;
+  c.fillStyle="#0c1f14";
+  /* 整个舞台先铺深色底（contain 留白处） */
+  c.setTransform(1,0,0,1,0,0);
+  c.fillRect(0,0,tableCv.width,tableCv.height);
+  c.setTransform(view.dpr*view.s,0,0,view.dpr*view.s,
+                 view.dpr*view.ox, view.dpr*view.oy);
+  c.fillStyle=RAIL_COLOR; c.fillRect(0,0,BASE_W,BASE_H);
+  c.strokeStyle=RAIL_DARK; c.lineWidth=4; c.strokeRect(2,2,BASE_W-4,BASE_H-4);
+  c.fillStyle=FELT; c.fillRect(PX0,PY0,PX1-PX0,PY1-PY0);
+  c.strokeStyle=FELT_EDGE; c.lineWidth=6; c.strokeRect(PX0,PY0,PX1-PX0,PY1-PY0);
+  var i,x,y,j;
+  for(i=1;i<8;i++){ x=PX0+i*(PX1-PX0)/8;
+    circle(c,x,RAIL/2,3,"#e8dcc0"); circle(c,x,BASE_H-RAIL/2,3,"#e8dcc0"); }
+  for(j=1;j<4;j++){ y=PY0+j*(PY1-PY0)/4;
+    circle(c,RAIL/2,y,3,"#e8dcc0"); circle(c,BASE_W-RAIL/2,y,3,"#e8dcc0"); }
+  POCKETS.forEach(function(p){
+    circle(c,p.x,p.y,p.r,"#0d0d0d","#2b2b2b",2);
+  });
+}
+function drawBall(c,pos,fill,number){
+  var x=pos[0],y=pos[1];
+  circle(c,x+2,y+4,BALL_R,"rgba(0,0,0,0.35)");
+  circle(c,x,y,BALL_R,fill,"#222222",1);
+  if(number!=null){
+    circle(c,x,y,7,"#ffffff");
+    text(c,String(number),x,y,"#111",9,true);
+  }
+}
+
+/* ============ 题目状态 ============ */
+var cur=null, answered=false, rounds=0, totalErr=0;
+var qTotal=0, qHard=0;
+
+function controlledScenario(){
+  var hard;
+  if(qTotal>0 && qHard/qTotal>=0.2) hard=false;
+  else hard=Math.random()<0.2;
+  var sc=hard?makeScenario(45,MAX_THETA):makeScenario(4,45);
+  if(hard&&!sc){ sc=makeScenario(4,45); hard=false; }
+  if(sc){ qTotal++; if(hard) qHard++; }
+  return sc;
+}
+
+function drawQuestion(){
+  drawTable();
+  var c=tctx, sc=cur, p=sc.P;
+  c.beginPath(); c.arc(p.x,p.y,p.r+5,0,Math.PI*2);
+  c.strokeStyle=GOLD; c.lineWidth=4; c.stroke();
+  drawBall(c,sc.C,"#f5f5f5",null);
+  drawBall(c,sc.O,sc.color,sc.number);
+}
+
+function drawAnswer(){
+  var c=tctx, sc=cur, C=sc.C, O=sc.O, u=sc.u, p=sc.P;
+  var mx=p.mx, my=p.my, theta=sc.theta;
+  var d=vnorm(vsub(O,C));
+  line(c,C[0]+d[0]*BALL_R,C[1]+d[1]*BALL_R, O[0]-d[0]*BALL_R,O[1]-d[1]*BALL_R,"#ffa726",2);
+  line(c,O[0]+u[0]*BALL_R,O[1]+u[1]*BALL_R, mx,my,"#fff59d",2);
+  circle(c,mx,my,4,GOLD);
+  var r1=rayToRail(O,d);
+  line(c,O[0]+d[0]*BALL_R,O[1]+d[1]*BALL_R, r1[0],r1[1],"#ffa726",2,[7,5]);
+  var r2=rayToRail(O,[-u[0],-u[1]]);
+  line(c,O[0]-u[0]*BALL_R,O[1]-u[1]*BALL_R, r2[0],r2[1],"#fff59d",2,[7,5]);
+  var r=46, a0=Math.atan2(d[1],d[0]), a1=Math.atan2(u[1],u[0]);
+  var cross=d[0]*u[1]-d[1]*u[0];
+  c.beginPath(); c.arc(O[0],O[1],r,a0,a1,cross<0);
+  c.strokeStyle="#ffab40"; c.lineWidth=3; c.stroke();
+  var bis=vnorm([d[0]+u[0],d[1]+u[1]]);
+  text(c,theta.toFixed(1)+"°",O[0]+bis[0]*(r+24),O[1]+bis[1]*(r+24),"#ffab40",15,true);
+  var G=sc.G;
+  c.beginPath(); c.arc(G[0],G[1],BALL_R,0,Math.PI*2);
+  c.strokeStyle="#ffffff"; c.lineWidth=2; c.setLineDash([6,4]); c.stroke(); c.setLineDash([]);
+  circle(c,G[0],G[1],9,null,"#ffffff",2);
+  circle(c,G[0],G[1],5,"#e53935");
+}
+
+function redraw(){
+  if(!cur) return;
+  drawQuestion();
+  if(answered) drawAnswer();
+}
+
+/* ============ 放大镜 ============ */
+function drawMag(){
+  var info=fitMag(), W=info.w, dpr=info.dpr, c=mctx;
+  var MB=485, k=W/MB;
+  c.setTransform(dpr*k,0,0,dpr*k,0,0);
+  c.clearRect(0,0,MB,MB);
+  var sc=cur, C=sc.C, O=sc.O, u=sc.u;
+  var d=vnorm(vsub(O,C));
+  var R2=BALL_R*3.75, LR=3*R2+70, mx=MB/2, my=MB/2;
+  circle(c,mx,my,LR,"#f7f7f7","#444444",2);
+  var pd=[-d[1],d[0]], pu=[-u[1],u[0]];
+  line(c,mx-d[0]*(R2+30),my-d[1]*(R2+30), mx+d[0]*(R2+30),my+d[1]*(R2+30),"#ffa726",3);
+  line(c,mx-u[0]*(2*R2+30),my-u[1]*(2*R2+30), mx+u[0]*(R2+30),my+u[1]*(R2+30),"#2e7d32",3);
+  var ax=mx+u[0]*(R2+30), ay=my+u[1]*(R2+30);
+  c.beginPath();
+  c.moveTo(ax+u[0]*16,ay+u[1]*16);
+  c.lineTo(ax+pu[0]*9,ay+pu[1]*9);
+  c.lineTo(ax-pu[0]*9,ay-pu[1]*9);
+  c.closePath(); c.fillStyle="#2e7d32"; c.fill();
+  circle(c,mx,my,R2,sc.color,"#222222",2);
+  circle(c,mx,my,18,"#ffffff");
+  text(c,String(sc.number),mx,my,"#111",26,true);
+  line(c,mx-d[0]*R2,my-d[1]*R2, mx+d[0]*R2,my+d[1]*R2,"#ffa726",3);
+  var gx=mx-2*R2*u[0], gy=my-2*R2*u[1];
+  c.beginPath(); c.arc(gx,gy,R2,0,Math.PI*2);
+  c.strokeStyle="#616161"; c.lineWidth=2; c.setLineDash([8,6]); c.stroke(); c.setLineDash([]);
+  [7,14,22,30,39,48,60].forEach(function(ad){
+    var lat0=2*R2*Math.sin(ad*Math.PI/180);
+    [1,-1].forEach(function(sgn){
+      var lat=sgn*lat0, qx=mx+pd[0]*lat, qy=my+pd[1]*lat;
+      var h=Math.sqrt(Math.max(LR*LR-lat*lat,0))*0.94;
+      line(c,qx-d[0]*h,qy-d[1]*h, qx+d[0]*h,qy+d[1]*h,"#a8a8a8",2);
+      text(c,String(ad),qx-d[0]*(h-14),qy-d[1]*(h-14),"#616161",10,true);
+    });
+  });
+  circle(c,gx,gy,16,null,"#ffffff",2);
+  circle(c,gx,gy,9,"#e53935");
+}
+
+/* ============ 流程 ============ */
+var resEl=document.getElementById('result'),
+    statsEl=document.getElementById('stats'), guessEl=document.getElementById('guess'),
+    btnSubmit=document.getElementById('btnSubmit'), btnNext=document.getElementById('btnNext');
+
+function newRound(){
+  cur=controlledScenario();
+  if(!cur){ resEl.textContent="出题失败，请点“下一题”重试。"; return; }
+  answered=false;
+  magCard.classList.remove('show');
+  drawQuestion();
+  guessEl.disabled=false; guessEl.value="";
+  btnSubmit.disabled=false; btnNext.disabled=true;
+  resEl.textContent="";
+}
+
+function onSubmit(){
+  if(answered||!cur) return;
+  var g=parseFloat((guessEl.value||"").trim());
+  if(isNaN(g)){ resEl.textContent="请输入一个数字，比如 30。"; return; }
+  if(g<0||g>90){ resEl.textContent="角度范围是 0~90°，再想想。"; return; }
+  var theta=cur.theta, err=Math.abs(g-theta);
+  rounds++; totalErr+=err; answered=true;
+  drawAnswer();
+  magCard.classList.add('show');
+  drawMag();
+  var comment = err<=2 ? "神准！"
+              : err<=5 ? "很准！"
+              : err<=10 ? "还不错。"
+              : "差得有点多。";
+  resEl.textContent="实际 "+theta.toFixed(1)+"°，你的 "+g.toFixed(1)+"°，误差 "+err.toFixed(1)+"° —— "+comment;
+  statsEl.textContent="已练 "+rounds+" 题 · 平均误差 "+(totalErr/rounds).toFixed(1)+"°";
+  guessEl.disabled=true; btnSubmit.disabled=true; btnNext.disabled=false;
+}
+
+document.getElementById('magClose').addEventListener('click',function(){
+  magCard.classList.remove('show');
+});
+btnSubmit.addEventListener('click',onSubmit);
+btnNext.addEventListener('click',newRound);
+document.getElementById('btnFs').addEventListener('click',function(){
+  if(document.fullscreenElement){ document.exitFullscreen(); }
+  else {
+    var el=document.documentElement;
+    if(el.requestFullscreen){ el.requestFullscreen().catch(function(){}); }
+  }
+});
+document.addEventListener('fullscreenchange',function(){
+  setTimeout(function(){ fitTable(); if(answered&&magCard.classList.contains('show')) drawMag(); },200);
+});
+guessEl.addEventListener('keydown',function(e){ if(e.key==='Enter') onSubmit(); });
+window.addEventListener('resize',function(){ fitTable(); if(answered&&magCard.classList.contains('show')) drawMag(); });
+window.addEventListener('orientationchange',function(){ setTimeout(function(){ fitTable(); if(answered&&magCard.classList.contains('show')) drawMag(); },300); });
+
+fitTable();
+newRound();
+</script>
+</body>
+</html>
