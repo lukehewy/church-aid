@@ -94,6 +94,7 @@
     <div class="card">
       <h3>手机号登录</h3>
       <p class="hint">仅限本教会弟兄姊妹使用。手机号仅用于登录，不会公开给任何人。</p>
+      <div class="hint" id="wa-hint" style="display:none;color:#8a6d1b;background:#fff8e1;border:1px solid #f0dfae;border-radius:8px;padding:8px 10px;">检测到你在 WhatsApp 内打开：建议点右上角 ⋮ 选择"在浏览器中打开"，登录状态更稳定，不用每次重新登录。</div>
       <div class="row">
         <select id="prefix" style="flex:0 0 110px;">
           <option value="+1">+1 加拿大</option>
@@ -199,6 +200,11 @@ var DEMO = firebaseConfig.apiKey === "PASTE_ME";
 var APP_VERSION = '2026-10-10-5'; // 每次发版改一次，登录页和“我的”页底部会显示
 document.getElementById('app-ver').textContent = '版本 ' + APP_VERSION;
 document.getElementById('app-ver-login').textContent = '版本 ' + APP_VERSION;
+/* WhatsApp 内置浏览器提示：建议用系统浏览器打开，登录状态才稳定 */
+try{
+  if(/whatsapp/i.test(navigator.userAgent))
+    document.getElementById('wa-hint').style.display = 'block';
+}catch(e){}
 </script>
 <script>
 /* ================= 数据层（演示/真实二选一） ================= */
