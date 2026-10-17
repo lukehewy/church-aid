@@ -716,6 +716,11 @@ function getPendingUsers(){
   return FbStore.db.collection('users').where('status','==','pending').get()
     .then(function(snap){ var arr=[]; snap.forEach(function(d){ arr.push(d.data()); }); return arr; });
 }
+function getApprovedUsers(){
+  if(DEMO){ return Promise.resolve(store.load().users.filter(function(u){ return u.status==='approved'; })); }
+  return FbStore.db.collection('users').where('status','==','approved').get()
+    .then(function(snap){ var arr=[]; snap.forEach(function(d){ arr.push(d.data()); }); return arr; });
+}
 function setUserStatus(phone, st){
   if(DEMO){ var d=store.load(); var u=d.users.find(function(x){ return x.phone===phone; }); if(u){ u.status=st; store.save(); } renderMine(); return; }
   FbStore.db.collection('users').doc(phone).update({ status: st }).then(renderMine)
@@ -743,6 +748,7 @@ function renderMine(){
   if(isAdmin){
     ab.innerHTML = '<div class="card"><h3>管理员</h3>' +
       '<p class="hint">待批准的新成员：</p><div id="pendinglist"><div class="empty" style="padding:12px;">暂无</div></div>' +
+      '<p class="hint">已加入的成员：</p><div id="memberlist"><div class="empty" style="padding:12px;">暂无</div></div>' +
       '<p class="hint">内容管理：进入任意内容可下架或删除。</p>' +
       '<button class="btn gray small" id="btn-allposts">浏览全部内容</button></div>';
     document.getElementById('btn-allposts').addEventListener('click', function(){
@@ -768,6 +774,18 @@ function renderMine(){
           this.disabled = true; setUserStatus(u.phone,'rejected');
         });
         pl.appendChild(row);
+      });
+    }).catch(function(){});
+    getApprovedUsers().then(function(list){
+      var ml = document.getElementById('memberlist');
+      if(!ml || !list.length) return;
+      ml.innerHTML = '';
+      list.forEach(function(u){
+        var row = document.createElement('div');
+        row.className = 'msg';
+        row.innerHTML = '<div class="who">'+escapeHtml(u.name)+'</div>' +
+          '<div class="hint">'+escapeHtml(u.phone)+'</div>';
+        ml.appendChild(row);
       });
     }).catch(function(){});
   } else { ab.innerHTML = ''; }
