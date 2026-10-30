@@ -197,7 +197,7 @@ var firebaseConfig = {
   appId: "1:689588966690:web:4051981a3f2d2e2eb0417b"
 };
 var DEMO = firebaseConfig.apiKey === "PASTE_ME";
-var APP_VERSION = '2026-10-10-5'; // 每次发版改一次，登录页和“我的”页底部会显示
+var APP_VERSION = '2026-10-30-1'; // 每次发版改一次，登录页和“我的”页底部会显示
 document.getElementById('app-ver').textContent = '版本 ' + APP_VERSION;
 document.getElementById('app-ver-login').textContent = '版本 ' + APP_VERSION;
 /* WhatsApp 内置浏览器提示：建议用系统浏览器打开，登录状态才稳定 */
@@ -208,7 +208,7 @@ try{
 </script>
 <script>
 /* ================= 数据层（演示/真实二选一） ================= */
-var ADMIN_PHONES = ["+14168776225"]; // 管理员手机号（何勇），自动通过、无需批准
+var ADMIN_PHONES = ["+14168776225", "+14165732836"]; // 管理员手机号（何勇、Leo），自动通过、无需批准
 var store = null;
 
 function uid(){ return Date.now().toString(36) + Math.floor(Math.random()*1e6).toString(36); }
